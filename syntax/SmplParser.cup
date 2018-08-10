@@ -1,0 +1,413 @@
+package smpl.syntax;
+
+import java_cup.runtime.*;
+import smpl.values.*;
+import java.io.*;
+import java.util.*;
+
+/* Preliminaries to set up and use the scanner.  */
+parser code {:
+		SmplLexer lexer;
+
+		public SmplParser(SmplLexer l) {
+		    // As of CUP v0.11, need to pass SmplLexer to superclass
+		    super(l);
+		    lexer = l;
+		}
+
+		public void report_error(String message, Object info) {
+		    System.err.println(message);
+		}
+
+		public void syntax_error(Symbol cur_token) {
+		    System.err.print("Line " + lexer.getLine() +
+				     " near char " + lexer.getChar() + ": ");
+		    report_error("Syntax error", cur_token);
+		    System.err.println ("Encountered token " +
+					 lexer.getText());
+		}
+	    :};
+/*
+init with {:
+	  :};
+
+scan with {:
+		try {
+		    return lexer.next_token();
+		} catch (java.io.IOException ioe) {
+		    System.out.println("Line " + lexer.getLine() + ", pos " +
+				       lexer.getColumn() +
+				       ": Unrecognised token <" +
+				       lexer.getText() + ">");
+		    System.out.println(ioe.getMessage());
+		    throw ioe;
+		}
+	  :};
+*/
+
+/* Terminals (tokens returned by the scanner). */
+
+/* Keywords */
+terminal PROC, CALL, LAZY, LET, DEF, THEN, IF, BITAND, PRINTLN, READ, BITNEG, CASE, BITOR, READINT, PRINT, ELSE, INT, WHILE, REDEFINE;
+
+/* Arithmetic operators */
+terminal PLUS, MINUS, MUL, DIV, MOD, POW;
+
+// special symbols
+terminal LPAREN, RPAREN, LBRACE, RBRACE, LCURLY,RCURLY, SEMI, COMMA, COLON, ASSIGN, PERIOD, CONCAT, EQUAL;
+
+/*Logical Operators*/
+terminal NOT,AND,OR;
+
+/*Terminals with values*/
+terminal String COMPARE;
+terminal Integer INTEGER;
+terminal Double REAL;
+terminal String VARIABLE;
+terminal String CHAR;
+terminal String STRING;
+terminal String HEX;
+terminal String BIN;
+terminal char UNICHAR;
+terminal String ALTCHAR;
+terminal TRUE, FALSE;
+terminal EMPTY_LIST;
+
+
+/* Non terminals */
+non terminal ASTProgram program;
+non terminal ASTStmtSequence stmtList;
+non terminal ASTStatement stmt;
+
+non terminal ASTStmtDefinition definition;
+
+
+/*Functions*/
+non terminal ASTExp fnDefn;
+non terminal ASTStmtFnDefn fnDefnFormal;
+non terminal ASTStmtFnDefn fnDefnPrest;
+non terminal ASTStmtFnDefn fnDefnAnyarg;
+non terminal ASTExpFnCall fnCall;
+non terminal ASTExp fnTerm;
+/*Functions*/
+
+
+non terminal ASTExp variableLengthExp;
+non terminal ArrayList<ASTExp>variableLengthExpE;
+non terminal ArrayList idList;
+non terminal ArrayList idListE;
+
+non terminal ArrayList<String> params;
+non terminal ArrayList<String> paramsAux;
+
+
+non terminal ASTExp listExp;
+
+/*Print and read section*/
+non terminal ASTExp printstmt;
+non terminal ASTExp printlnstmt;
+non terminal ASTExp printExp;
+non terminal ASTExp readExp;
+non terminal ASTExp readstmt;
+non terminal ASTExp readintstmt;
+/*Print and read section*/
+
+non terminal SmplValue<?> literal;
+
+non terminal ASTExp letStmt;
+non terminal ArrayList bindings;
+non terminal ArrayList bindingsAux;
+non terminal ASTExp assignment;
+non terminal ASTExp letbinding;
+non terminal ASTExp valStmt;
+non terminal ASTExp caseExp;
+non terminal ASTCaseBinding caseBinding;
+non terminal ArrayList<ASTCaseBinding> caseBindings;
+non terminal ASTExp whileCon;
+non terminal ASTExp listCon;
+non terminal ASTExp listConAux;
+non terminal ASTExp con;
+non terminal ASTRedefineExp redefineExp;
+
+
+non terminal ASTExp ifStmt;
+non terminal ASTExp ifStmtAux;
+non terminal ASTExp lOr;
+non terminal ASTExp lAnd;
+non terminal ASTExp lNot;
+non terminal ASTExp cmp;
+non terminal ASTExp exp;
+
+non terminal ASTExp bitW;
+
+non terminal ASTExp bOr;
+non terminal ASTExp bAnd;
+non terminal ASTExp bNot;
+non terminal ASTExp neg;
+
+
+
+non terminal ASTVectorExp vec;
+non terminal ASTVectorDef vecDef;
+non terminal ASTExp vectorBindings;
+
+
+
+non terminal ASTExp arithexpression;
+non terminal ASTExp term;
+non terminal ASTExp factor;
+non terminal ASTExp call;
+non terminal empty;
+
+/* Grammar rules */
+
+program ::= stmtList:s {: RESULT = new ASTProgram(s); :};
+
+stmtList ::= stmtList:lst stmt:s {:
+		lst.add(s); 
+		RESULT = lst;
+		:} |
+	     stmt:s {:
+		RESULT = new ASTStmtSequence(s);
+		:};
+
+
+stmt ::= definition:d {: RESULT = d; :} |
+	variableLengthExp:val SEMI {: RESULT = val; :};
+
+
+variableLengthExp ::= valStmt:e variableLengthExpE:a {:
+            a.add(e);
+            RESULT = new ASTExp(a); :};/*|
+           empty {: RESULT = new ASTExp(new ArrayList()); :};*/
+
+variableLengthExpE ::= COMMA valStmt:e variableLengthExpE:a {:
+            a.add(e);
+            RESULT = a; :}|
+           empty {: RESULT = new ArrayList(); :};
+
+
+
+valStmt ::= letStmt:l {: RESULT = l; :} |
+	    LCURLY stmtList:body RCURLY{: RESULT = body; :} |
+	   	lOr:o {: RESULT =o;:}|
+	   	fnDefn:fd {: RESULT = fd; :}|
+	   	assignment:a {: RESULT =a;:}|
+	   	ifStmt:i {: RESULT =i;:}|
+	    printExp:p {: RESULT =p;:}|
+	    readExp:r {: RESULT =r;:}|
+	    letbinding:let{: RESULT =let;:}|
+ 		listCon:lc {: RESULT = lc; :} |
+	    caseExp:ce{: RESULT = ce;:}|
+	    whileCon:w {: RESULT = w; :} |
+	    redefineExp:rE{: RESULT = rE;:};
+
+
+
+
+
+ 
+letStmt ::= LET LPAREN variableLengthExp:bs RPAREN  valStmt:body  {:RESULT = new ASTStmtLet(bs, body);:};
+
+
+assignment ::= VARIABLE:v ASSIGN valStmt:vs {:RESULT = new ASTBinding(v, vs);:};
+
+
+letbinding ::= VARIABLE:var EQUAL valStmt:val {:RESULT = new ASTLetBinding(var,val);:};
+
+
+/* Function Defintions */
+
+params ::= VARIABLE:v paramsAux:pl {:
+			pl.add(0, v);
+			RESULT = pl; :} |
+			empty {: RESULT = new ArrayList<>(); :};
+
+paramsAux ::= COMMA VARIABLE:v paramsAux:pl {:
+			pl.add(0, v);
+			RESULT = pl; :} |
+			empty {: RESULT = new ArrayList(); :};
+
+fnDefn ::= fnDefnFormal:fnform {: RESULT = fnform;:};
+
+
+fnDefnFormal ::= PROC LPAREN params:args RPAREN valStmt:body {: RESULT = new ASTStmtFnDefn(args,null,body);:};
+
+fnCall ::= factor:name LPAREN variableLengthExp:val RPAREN {: RESULT = new ASTExpFnCall(name,val);:};
+
+fnTerm ::= LPAREN fnDefn:fn RPAREN {: RESULT = fn;:};
+
+/* Function Definitions */
+
+
+   
+
+
+/*VARIABLE DECLARATION*/
+definition ::= DEF VARIABLE:v valStmt:vs SEMI{:
+		   RESULT = new ASTStmtDefinition(v, vs);
+		:};
+/*VARIABLE DECLARATION*/
+
+
+/*PRINT AND READ STATEMENTS*/
+
+printExp ::= printstmt:p {: RESULT =p;:}| printlnstmt:pln {: RESULT=pln;:};
+
+readExp ::= readstmt:r {: RESULT =r;:}| readintstmt:rint {: RESULT=rint;:};
+
+readstmt ::= READ LPAREN RPAREN {: RESULT = new ASTReadExp();:};
+
+readintstmt ::= READINT LPAREN RPAREN {: RESULT = new ASTReadIntExp();:};
+
+printstmt ::= PRINT LPAREN valStmt:val RPAREN {: RESULT = new ASTPrintExp(val);:};
+
+printlnstmt ::= PRINTLN LPAREN valStmt:val RPAREN {: RESULT = new ASTPrintLnExp(val);:};
+
+
+
+/*PRINT AND READ STATEMENTS*/
+
+
+/*IF STATEMENTS*/
+
+ifStmt ::= IF lOr:v THEN lOr:vs ifStmtAux:val {: RESULT = new ASTIFExp(v,vs,val); :};
+
+ifStmtAux ::= ELSE lOr:vs {: RESULT = vs; :} | empty {: RESULT = new ASTExp(new ArrayList()); :};
+
+/*IF STATEMENTS*/
+
+
+
+/*CASE STATEMENTS*/
+
+caseExp ::= CASE LCURLY caseBindings:b RCURLY {: RESULT = new ASTCaseExp(b);:};
+
+caseBinding ::= lOr:exp COLON valStmt:val {: RESULT = new ASTCaseBinding(exp,val);:}; 
+
+caseBindings ::= caseBinding:bind COMMA caseBindings:lst {: lst.add(bind); RESULT = lst;:} | caseBinding:b {: ArrayList<ASTCaseBinding> lst = new ArrayList<ASTCaseBinding>(); lst.add(b); RESULT = lst;:}| ELSE COLON valStmt:val {: ArrayList<ASTCaseBinding> lst = new ArrayList<ASTCaseBinding>(); lst.add(new ASTCaseBinding(new ASTCmp("=",new ASTExpLit(1), new ASTExpLit(1)),val)); RESULT =lst;:};
+
+/*CASE STATEMENTS*/
+
+
+
+/*FUNCTION CALLS*/
+
+call ::= CALL LPAREN factor:f COMMA factor:lst RPAREN {:RESULT = new ASTCallExp(f, lst);:};
+
+
+listExp ::= LBRACE variableLengthExp: lst RBRACE{: RESULT = new ASTListExp(lst); :}| EMPTY_LIST {: RESULT =new ASTListExp(new ASTExp(new ArrayList()));:};
+
+/*FUNCTION CALLS*/
+
+
+/*List concat*/
+con ::= factor:f CONCAT factor:fac {: RESULT = new ASTListCon(f, fac); :};
+
+listConAux ::= CONCAT factor:f listConAux:la {: RESULT = new ASTListCon(f, la); :}|
+        empty {: RESULT = new ASTListExp(new ASTExp(new ArrayList())); :};
+
+listCon ::= con:c listConAux:la {: RESULT = new ASTListCon(c, la); :};
+/*List concat*/
+
+
+/*Vectors*/
+vecDef ::= LBRACE COLON variableLengthExp:v COLON RBRACE {: RESULT = new ASTVectorDef(v); :};
+
+vec ::= factor:v LBRACE valStmt:f RBRACE {:
+                   RESULT = new ASTVectorExp(v, f); :};
+
+vectorBindings ::= valStmt:v COLON valStmt:vs {:RESULT = new ASTVectorBinding(v, vs); :};
+/*Vectors*/
+
+
+/* WHILE STATEMENTS */
+
+whileCon ::= WHILE LPAREN valStmt:vs RPAREN valStmt:v {: RESULT = new ASTWhileExp(vs, v); :};
+
+/* WHILE STATEMENTS */
+
+
+
+/*ARITHMETIC*/
+
+lOr ::= lOr:o OR lAnd:a {: RESULT = new ASTLOr(o, a); :} |
+        lAnd:a {: RESULT = a; :};
+
+lAnd ::= lAnd:a AND lNot:n {: RESULT = new ASTLAnd(a, n); :} |
+         lNot:n {: RESULT = n; :};
+
+lNot ::= NOT lNot:n  {: RESULT = new ASTLNot(n); :} |
+         cmp:c {: RESULT = c; :};
+
+cmp ::= cmp:c COMPARE:op arithexpression:a {: RESULT = new ASTCmp(op, c, a); :} |
+	bAnd:a {: RESULT = a; :};
+
+bAnd ::= bAnd:a BITAND bOr:o {: RESULT = new ASTBAnd(a, o); :} |
+         bOr:o {: RESULT = o; :};
+
+bOr ::= bOr:o BITOR arithexpression:a {: RESULT = new ASTBOr(o, a); :} |arithexpression:a {: RESULT = a; :};
+
+arithexpression ::= arithexpression:e PLUS term:t {:
+			RESULT = new ASTExpAdd(e, t); :} |
+		arithexpression:e MINUS term:t {:
+			RESULT = new ASTExpSub(e, t); :} |
+		term:t {: RESULT = t; :};
+
+term ::= term:t MUL exp:e {:
+		RESULT = new ASTExpMul(t, e); :} |
+	 term:t DIV exp:e {:
+		RESULT = new ASTExpDiv(t, e); :} |
+	 term:t MOD exp:e {:
+		RESULT = new ASTExpMod(t, e); :} | 
+	 exp:e  {: RESULT = e; :};
+
+exp ::= exp:e POW factor:f {: RESULT = new ASTE(e, f); :} |
+	 neg:n {: RESULT = n; :};
+
+neg ::= MINUS neg:n {: RESULT = new ASTExpSub(new ASTExpLit(0), n); :} |
+        bNot:n {: RESULT = n; :};
+
+bNot ::= BITNEG bNot:n {: RESULT = new ASTBNot(n); :} |
+	 factor:f {: RESULT = f; :};
+
+literal ::= INTEGER:ilit {: RESULT = SmplValue.make(ilit);:}|
+	    STRING:slit {: RESULT = SmplValue.make(slit);:}|
+	    TRUE {: RESULT = SmplValue.make(true); :} |
+	    UNICHAR:ulit{: RESULT = SmplValue.make(ulit);:}|
+	    CHAR:clit {: RESULT = SmplValue.make(clit);:}|
+	    ALTCHAR:alit {: RESULT = SmplValue.make(alit);:}|
+		FALSE {: RESULT = SmplValue.make(false); :};
+
+
+redefineExp ::= REDEFINE VARIABLE:v LPAREN fnDefn:var RPAREN {: RESULT = new ASTRedefineExp(v,var);:};
+
+factor ::= literal:lit {: RESULT = new ASTExpLit(lit); :} |
+	   LPAREN variableLengthExp:e RPAREN {: RESULT = e; :}|
+	   VARIABLE:var {: RESULT = new ASTExpVar(var); :} |
+	   call:c {: RESULT = c; :} |
+	   fnCall:fc {: RESULT =fc;:}|
+	   listExp:le {: RESULT =le;:}|
+	   vec:v {: RESULT = v; :} |
+	   vecDef:vd {: RESULT = vd; :};
+	   
+
+
+/*ARITHMETIC*/
+
+
+empty ::= ;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
